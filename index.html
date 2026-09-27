@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pomodoro Together</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #181b22;
+    --card2: #20242d;
+    --txt: #e8ebf0;
+    --muted: #8b93a3;
+    --accent: #ff6b5b;
+    --accent2: #ffb03a;
+    --green: #3ddc97;
+    --border: #2a2f3a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    background: radial-gradient(1200px 800px at 50% -10%, #1d2230 0%, var(--bg) 60%);
+    color: var(--txt);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: 20px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 460px;
+    background: linear-gradient(180deg, var(--card), #14171d);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 28px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .hidden { display: none !important; }
+
+  h1 {
+    font-size: 24px;
+    margin: 0 0 8px;
+    letter-spacing: -.4px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 22px;
+  }
+
+  button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--txt);
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: transform .08s ease, background .15s ease, border-color .15s ease, opacity .15s;
+  }
+  button:hover:not(:disabled) { background: #262b36; border-color: #39404e; }
+  button:active:not(:disabled) { transform: scale(.97); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+
+  button.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    color: #1a1208;
+    box-shadow: 0 8px 24px rgba(255,107,91,.28);
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.07); background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+
+  .full { width: 100%; }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 20px 0;
+  }
+  .divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .join-row { display: flex; gap: 10px; }
+  input {
+    font: inherit;
+    color: var(--txt);
+    background: #12151b;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    outline: none;
+    transition: border-color .15s ease;
+  }
+  #codeInput {
+    flex: 1;
+    min-width: 0;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 12px;
+  }
+  input:focus { border-color: var(--accent); }
+
+  .msg {
+    min-height: 20px;
+    font-size: 13px;
+    color: var(--accent2);
+    margin: 14px 0 0;
+    text-align: center;
+  }
+
+  /* ---------- room ---------- */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 26px;
+  }
+  .code {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .code b {
+    color: var(--txt);
+    letter-spacing: 3px;
+    font-size: 15px;
+  }
+  .code button {
+    padding: 5px 9px;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(61,220,151,.13);
+    color: var(--green);
+    border: 1px solid rgba(61,220,151,.25);
+  }
+  .badge.guest {
+    background: rgba(139,147,163,.13);
+    color: var(--muted);
+    border-color: var(--border);
+  }
+
+  .timer-wrap { text-align: center; margin-bottom: 8px; }
+  .timer {
+    font-size: clamp(64px, 19vw, 104px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -3px;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    background: linear-gradient(180deg, #fff, #9aa4b5);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .timer.done {
+    background: linear-gradient(180deg, var(--accent2), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .progress {
+    height: 6px;
+    background: #12151b;
+    border-radius: 99px;
+    overflow: hidden;
+    margin: 22px 0 6px;
+    border: 1px solid var(--border);
+  }
+  .progress > div {
+    height: 100%;
+    width: 0%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .25s linear;
+  }
+
+  .status {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    min-height: 18px;
+    margin-bottom: 22px;
+  }
+
+  .controls { display: flex; gap: 10px; margin-bottom: 14px; }
+  .controls button { flex: 1; padding: 15px; font-size: 16px; }
+
+  .presets { display: flex; gap: 8px; }
+  .presets button { flex: 1; padding: 10px 4px; font-size: 13px; font-weight: 500; }
+
+  /* custom time row */
+  .custom-time {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    margin-top: 12px;
+  }
+  .custom-time .field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .custom-time label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    padding-left: 3px;
+  }
+  .custom-time input {
+    font-weight: 700;
+    font-size: 16px;
+    text-align: center;
+    padding: 10px 6px;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .custom-time input::-webkit-outer-spin-button,
+  .custom-time input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .custom-time input:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+  }
+  .custom-time button {
+    padding: 11px 18px;
+    font-size: 13px;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .footer button { padding: 8px 12px; font-size: 12px; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<!-- ================= LOBBY ================= -->
+<div id="lobby" class="card">
+  <h1>🍅 Pomodoro Together</h1>
+  <p class="sub">Focus with your friends. The timer stays in sync and the alarm rings on everyone's device at the same moment.</p>
+
+  <button id="createBtn" class="primary full">Create a room</button>
+
+  <div class="divider">or</div>
+
+  <div class="join-row">
+    <input id="codeInput" placeholder="CODE" maxlength="4" autocomplete="off" spellcheck="false" />
+    <button id="joinBtn">Join</button>
+  </div>
+
+  <p id="lobbyMsg" class="msg"></p>
+</div>
+
+<!-- ================= ROOM ================= -->
+<div id="room" class="card hidden">
+  <div class="topbar">
+    <div class="code">
+      Room <b id="roomCodeLabel">----</b>
+      <button id="copyBtn" title="Copy room code">copy</button>
+    </div>
+    <div id="roleLabel" class="badge">Host</div>
+  </div>
+
+  <div class="timer-wrap">
+    <div id="timerDisplay" class="timer">25:00</div>
+  </div>
+
+  <div class="progress"><div id="progressFill"></div></div>
+  <div id="statusLabel" class="status">Ready when you are</div>
+
+  <div class="controls">
+    <button id="startBtn" class="primary host-only">Start</button>
+    <button id="resetBtn" class="host-only">Reset</button>
+  </div>
+
+  <div class="presets">
+    <button class="host-only" data-min="25">25 min</button>
+    <button class="host-only" data-min="5">5 min</button>
+    <button class="host-only" data-min="15">15 min</button>
+    <button class="host-only" data-min="50">50 min</button>
+  </div>
+
+  <!-- custom time with seconds -->
+  <div class="custom-time">
+    <div class="field">
+      <label for="customMin">Minutes</label>
+      <input type="number" id="customMin" class="host-only" min="0" max="999" value="25" inputmode="numeric" />
+    </div>
+    <div class="field">
+      <label for="customSec">Seconds</label>
+      <input type="number" id="customSec" class="host-only" min="0" max="59" value="0" inputmode="numeric" />
+    </div>
+    <button id="setCustomBtn" class="host-only">Set</button>
+  </div>
+
+  <div class="footer">
+    <span id="peersLabel">1 in room</span>
+    <div style="display:flex;gap:8px">
+      <button id="soundBtn">🔔 Test sound</button>
+      <button id="leaveBtn">Leave</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const PREFIX = "pomo-together-v1-";
+
+  // ---------- state ----------
+  let peer = null;
+  let isHost = false;
+  let roomCode = "";
+  let hostConn = null;      // guest -> host connection
+  let conns = [];           // host -> guest connections
+  let roomActive = false;
+  let audioCtx = null;
+
+  const DEFAULT_SEC = 25 * 60;   // default 25 minutes
+  let timer = {
+    durationMs: DEFAULT_SEC * 1000,
+    remainingMs: DEFAULT_SEC * 1000,
+    running: false,
+    updatedAt: Date.now()
+  };
+
+  // ---------- helpers ----------
+  const fmt = (ms) => {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  };
+
+  const localRemaining = () =>
+    timer.running ? Math.max(0, timer.remainingMs - (Date.now() - timer.updatedAt))
+                  : timer.remainingMs;
+
+  const makeCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let s = "";
+    for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  };
+
+  const setMsg = (t) => { $("lobbyMsg").textContent = t || ""; };
+  const setStatus = (t) => { $("statusLabel").textContent = t || ""; };
+
+  // keep the custom inputs showing the current session length
+  function syncCustomInputs() {
+    const totalSec = Math.round(timer.durationMs / 1000);
+    $("customMin").value = Math.floor(totalSec / 60);
+    $("customSec").value = totalSec % 60;
+  }
+
+  // ---------- audio ----------
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  function playAlarm() {
+    const ctx = ensureAudio();
+    if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
+    if (!ctx) return;
+
+    const t0 = ctx.currentTime + 0.05;
+    for (let i = 0; i < 8; i++) {
+      const t = t0 + i * 0.38;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(i % 2 ? 988 : 1319, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.36);
+    }
+  }
+
+  // ---------- rendering ----------
+  function render() {
+    const rem = localRemaining();
+    const disp = fmt(rem);
+    $("timerDisplay").textContent = disp;
+    document.title = disp + " · Pomodoro Together";
+
+    const done = rem <= 0;
+    $("timerDisplay").classList.toggle("done", done);
+
+    const pct = timer.durationMs > 0
+      ? Math.min(100, Math.max(0, (1 - rem / timer.durationMs) * 100))
+      : 0;
+    $("progressFill").style.width = pct + "%";
+
+    if (isHost) {
+      $("startBtn").textContent = timer.running ? "Pause" : (done ? "Start again" : "Start");
+    }
+  }
+
+  function updatePeersLabel(count) {
+    $("peersLabel").textContent = count + (count === 1 ? " in room" : " in room");
+  }
+
+  // ---------- host: broadcasting ----------
+  function currentState() {
+    return {
+      type: "state",
+      durationMs: timer.durationMs,
+      remainingMs: localRemaining(),
+      running: timer.running
+    };
+  }
+
+  function broadcast(msg) {
+    if (!isHost) return;
+    conns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (e) {} } });
+  }
+
+  const broadcastState = () => broadcast(currentState());
+
+  function broadcastPeers() {
+    const count = conns.length + 1;
+    updatePeersLabel(count);
+    broadcast({ type: "peers", count });
+  }
+
+  // ---------- host actions ----------
+  function hostFinish() {
+    timer.running = false;
+    timer.remainingMs = 0;
+    timer.updatedAt = Date.now();
+    broadcastState();
+    broadcast({ type: "finished" });
+    playAlarm();
+    setStatus("Time's up! 🎉 Take a break.");
+    render();
+  }
+
+  function toggleStart() {
+    if (!isHost) return;
+    ensureAudio();
+    if (timer.running) {
+      timer.remainingMs = localRemaining();
+      timer.running = false;
+      setStatus("Paused");
+    } else {
+      if (timer.remainingMs <= 0) timer.remainingMs = timer.durationMs;
+      timer.updatedAt = Date.now();
+      timer.running = true;
+      setStatus("Focusing…");
+    }
+    broadcastState();
+    render();
+  }
+
+  function resetTimer() {
+    if (!isHost) return;
+    timer.running = false;
+    timer.remainingMs = timer.durationMs;
+    timer.updatedAt = Date.now();
+    broadcastState();
+    setStatus("Reset — ready when you are");
+    render();
+  }
+
+  // set the session length (in seconds), then stop & reset
+  function setDurationSec(totalSec) {
+    if (!isHost) return;
+    const ms = Math.max(1000, Math.round(totalSec * 1000)); // minimum 1 second
+    timer.durationMs = ms;
+    timer.remainingMs = ms;
+    timer.running = false;
+    timer.updatedAt = Date.now();
+    syncCustomInputs();
+    broadcastState();
+    setStatus(fmt(ms) + " session ready");
+    render();
+  }
+
+  // ---------- guest: receiving ----------
+  function handleGuestData(data) {
+    if (!data || typeof data !== "object") return;
+
+    if (data.type === "state") {
+      timer.durationMs = data.durationMs;
+      timer.remainingMs = data.remainingMs;
+      timer.running = data.running;
+      timer.updatedAt = Date.now(); // re-anchor to local clock
+      syncCustomInputs();
+      if (data.running) setStatus("Focusing…");
+      render();
+    } else if (data.type === "finished") {
+      playAlarm();
+      setStatus("Time's up! 🎉 Take a break.");
+      render();
+    } else if (data.type === "peers") {
+      updatePeersLabel(data.count);
+    }
+  }
+
+  // ---------- room entry ----------
+  function enterRoom() {
+    roomActive = true;
+    $("lobby").classList.add("hidden");
+    $("room").classList.remove("hidden");
+    $("roomCodeLabel").textContent = roomCode;
+    $("roleLabel").textContent = isHost ? "Host" : "Guest";
+    $("roleLabel").classList.toggle("guest", !isHost);
+
+    document.querySelectorAll(".host-only").forEach((el) => {
+      if (el.tagName === "BUTTON" || el.tagName === "INPUT") el.disabled = !isHost;
+    });
+
+    syncCustomInputs();
+
+    if (!isHost) {
+      setStatus("Connected — waiting for the host");
+      updatePeersLabel(2);
+    } else {
+      updatePeersLabel(1);
+      setStatus("Share the code with your friends");
+    }
+    render();
+  }
+
+  // ---------- create room (host) ----------
+  let createAttempts = 0;
+
+  function createRoom() {
+    ensureAudio();
+    isHost = true;
+    roomCode = makeCode();
+    setMsg("Creating room…");
+
+    peer = new Peer(PREFIX + roomCode, { debug: 1 });
+
+    peer.on("open", () => {
+      setMsg("");
+      enterRoom();
+    });
+
+    peer.on("connection", (conn) => {
+      conn.on("open", () => {
+        conns.push(conn);
+        if (conn.open) conn.send(currentState());
+        broadcastPeers();
+        setStatus(conns.length + (conns.length === 1 ? " friend joined" : " friends joined"));
+      });
+
+      conn.on("data", () => { /* guests are listeners only */ });
+
+      conn.on("close", () => {
+        conns = conns.filter((c) => c !== conn);
+        broadcastPeers();
+      });
+
+      conn.on("error", () => {
+        conns = conns.filter((c) => c !== conn);
+        broadcastPeers();
+      });
+    });
+
+    peer.on("error", (err) => {
+      if (err.type === "unavailable-id" && createAttempts < 3) {
+        createAttempts++;
+        try { peer.destroy(); } catch (e) {}
+        createRoom();
+      } else {
+        setMsg("Connection error: " + err.type + ". Try again.");
+      }
+    });
+  }
+
+  // ---------- join room (guest) ----------
+  function joinRoom() {
+    const code = $("codeInput").value.trim().toUpperCase();
+    if (code.length !== 4) { setMsg("Enter the 4-character room code"); return; }
+
+    ensureAudio();
+    isHost = false;
+    roomCode = code;
+    setMsg("Connecting…");
+
+    peer = new Peer({ debug: 1 });
+
+    peer.on("open", () => {
+      hostConn = peer.connect(PREFIX + code, { reliable: true });
+
+      hostConn.on("open", () => {
+        setMsg("");
+        enterRoom();
+      });
+
+      hostConn.on("data", handleGuestData);
+
+      hostConn.on("close", () => {
+        setStatus("Host disconnected");
+        roomActive = false;
+      });
+
+      hostConn.on("error", () => setMsg("Could not reach that room."));
+    });
+
+    peer.on("error", (err) => {
+      if (err.type === "peer-unavailable") {
+        setMsg("Room \"" + code + "\" not found. Check the code.");
+      } else if (err.type !== "peer-unavailable") {
+        setMsg("Error: " + err.type);
+      }
+      if (!roomActive) { try { peer.destroy(); } catch (e) {} }
+    });
+  }
+
+  // ---------- main loop ----------
+  setInterval(() => {
+    if (!roomActive) return;
+
+    if (isHost && timer.running && localRemaining() <= 0) {
+      hostFinish();
+    }
+    render();
+  }, 150);
+
+  // periodic re-sync so clients never drift
+  setInterval(() => {
+    if (isHost && timer.running) broadcastState();
+  }, 3000);
+
+  // ---------- UI events ----------
+  $("createBtn").addEventListener("click", () => { ensureAudio(); createRoom(); });
+  $("joinBtn").addEventListener("click", joinRoom);
+  $("codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
+
+  $("startBtn").addEventListener("click", toggleStart);
+  $("resetBtn").addEventListener("click", resetTimer);
+
+  // presets (in minutes)
+  document.querySelectorAll(".presets button").forEach((btn) => {
+    btn.addEventListener("click", () => setDurationSec(Number(btn.dataset.min) * 60));
+  });
+
+  // custom time with seconds
+  $("setCustomBtn").addEventListener("click", () => {
+    if (!isHost) return;
+    const m = Math.max(0, Math.min(999, parseInt($("customMin").value, 10) || 0));
+    const s = Math.max(0, Math.min(59, parseInt($("customSec").value, 10) || 0));
+    const total = m * 60 + s;
+    if (total < 1) { setStatus("Enter at least 1 second"); return; }
+    $("customMin").value = m;
+    $("customSec").value = s;
+    setDurationSec(total);
+  });
+
+  // allow Enter inside the custom inputs to apply
+  ["customMin", "customSec"].forEach((id) => {
+    $(id).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); $("setCustomBtn").click(); }
+    });
+    $(id).addEventListener("input", () => {
+      // keep values sane while typing
+      const el = $(id);
+      const max = id === "customSec" ? 59 : 999;
+      if (el.value !== "" && Number(el.value) > max) el.value = max;
+      if (el.value !== "" && Number(el.value) < 0) el.value = 0;
+    });
+  });
+
+  $("soundBtn").addEventListener("click", () => { ensureAudio(); playAlarm(); });
+
+  $("copyBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      $("copyBtn").textContent = "copied!";
+      setTimeout(() => { $("copyBtn").textContent = "copy"; }, 1200);
+    } catch (e) {
+      $("copyBtn").textContent = roomCode;
+    }
+  });
+
+  $("leaveBtn").addEventListener("click", () => {
+    try { if (peer) peer.destroy(); } catch (e) {}
+    location.reload();
+  });
+
+  // prefill room code from URL hash: index.html#ABCD
+  const hash = location.hash.replace("#", "").toUpperCase();
+  if (/^[A-Z0-9]{4}$/.test(hash)) {
+    $("codeInput").value = hash;
+    setMsg("Room code ready — hit Join");
+  }
+
+  // keep audio context alive after the first gesture
+  document.addEventListener("click", () => ensureAudio(), { once: true });
+})();
+</script>
+</body>
+</html>
